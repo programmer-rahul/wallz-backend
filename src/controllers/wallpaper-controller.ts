@@ -54,6 +54,7 @@ const getWallpapersByCategoryController = async (
 ) => {
   try {
     // Get category from request parameters
+    console.log('request');
     const { category } = req.params;
 
     // Get page and limit from query parameters

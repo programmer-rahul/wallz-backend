@@ -1,10 +1,12 @@
 {
   "name": "wallpaper-app-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node ./index.ts"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node ./index.ts"
   },
   "dependencies": {
     "cloudinary": "^2.5.1",
