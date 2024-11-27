@@ -2,8 +2,7 @@ import mongoose from "mongoose";
 import WallpaperModel from "./src/models/wallpaper-schema"; // Adjust the path if needed
 
 // Connect to MongoDB
-const mongoUri =
-  "mongodb+srv://programmerrahulofficial:DYQ2l23NjcbQT758@wallpaper-app.76cby.mongodb.net/?retryWrites=true&w=majority&appName=wallpaper-app"; // Replace with your MongoDB URI
+const mongoUri = process.env.MONGODB_URL as string;
 mongoose
   .connect(mongoUri, {})
   .then(() => console.log("Connected to MongoDB"))
