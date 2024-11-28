@@ -40,7 +40,7 @@ const getAllCategoriesController = async (
     }
 
     // Cache categories in Redis for 1 hour
-    await redisClient.setEx(cacheKey, 3600, JSON.stringify(categories));
+    await redisClient.setex(cacheKey, 3600, JSON.stringify(categories));
 
     res.status(200).json({ allCategories: categories });
   } catch (error) {
@@ -49,4 +49,4 @@ const getAllCategoriesController = async (
   }
 };
 
-export {getAllCategoriesController}
+export { getAllCategoriesController };

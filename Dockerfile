@@ -20,7 +20,7 @@ RUN yarn build
 RUN yarn install --production --force
 
 # Expose the port your app runs on
-EXPOSE 3000
+EXPOSE 4000
 
 # Command to run your application
 CMD ["node", "dist/index.js"]

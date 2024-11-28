@@ -31,7 +31,7 @@ const addWallpaperController = async (req: Request, res: Response) => {
 
     await newWallpaper.save();
 
-    // Invalidate relevant Redis caches
+    // Invalidate relevant redisClient caches
     await redisClient.del("categories"); // Clear category cache
     await redisClient.keys(`wallpapers:*`).then((keys) => {
       if (keys.length) redisClient.del(keys); // Clear all wallpaper-related caches
@@ -49,6 +49,7 @@ const getWallpapersByCategoryController = async (
   res: Response
 ): Promise<void> => {
   try {
+    console.log("get wallpapers request");
     const { category } = req.params;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -56,7 +57,7 @@ const getWallpapersByCategoryController = async (
 
     const cacheKey = `wallpapers:${category}:${page}:${limit}`;
 
-    // Check Redis cache
+    // Check redisClient cache
     const cachedData = await redisClient.get(cacheKey);
     if (cachedData) {
       res.status(200).json(JSON.parse(cachedData));
@@ -69,8 +70,10 @@ const getWallpapersByCategoryController = async (
     let wallpapers, totalCount;
 
     if (category === "all-wallpapers") {
-      wallpapers = await WallpaperModel.find({}).skip(skip).limit(limit);
-      totalCount = await WallpaperModel.countDocuments({});
+      wallpapers = await WallpaperModel.aggregate([
+        { $sample: { size: limit } }, // Randomly sample `limit` documents
+      ]);
+      totalCount = await WallpaperModel.countDocuments({}); // Total documents
     } else if (category === "favourite" && favouriteIds) {
       const ids = JSON.parse(favouriteIds as string);
       wallpapers = await WallpaperModel.find({ id: { $in: ids } })
@@ -94,8 +97,8 @@ const getWallpapersByCategoryController = async (
       wallpapers,
     };
 
-    // Cache result in Redis for 30 minutes
-    await redisClient.setEx(cacheKey, 1800, JSON.stringify(result));
+    // Cache result in redisClient for 30 minutes
+    await redisClient.setex(cacheKey, 1800, JSON.stringify(result));
 
     res.status(200).json(result);
   } catch (error) {
