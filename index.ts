@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import { wallpaperRouter } from "./src/routes/wallpaper-route";
 import { categoryRouter } from "./src/routes/category-route";
+import { connectCloudinary } from "./src/config/cloudinary";
 
 dotenv.config({
   path: ".env",
@@ -25,11 +26,12 @@ app.use("/wallpaper", wallpaperRouter);
 app.use("/category", categoryRouter);
 
 DBConnect()
-  .then(() =>
+  .then(() => {
+    connectCloudinary();
     app.listen(PORT, () => {
       "Server is running!";
-    })
-  )
+    });
+  })
   .catch((err) => {
     console.log("Database connection error :- ", err);
   });
