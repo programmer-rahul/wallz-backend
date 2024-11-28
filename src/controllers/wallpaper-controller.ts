@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
 import { uploadToCloudinary } from "../config/cloudinary";
 import WallpaperModel from "../models/wallpaper-schema";
-import fs from "fs";
-import path from "path";
+import { redisClient } from "../config/redis";
 
 const addWallpaperController = async (req: Request, res: Response) => {
   try {
@@ -10,26 +9,15 @@ const addWallpaperController = async (req: Request, res: Response) => {
     const { category } = req.body;
     const wallpaperImage = req.file;
 
-    // console.log("category", category);
-    // console.log("wallpaperImage", wallpaperImage);
-
-    if (!category) {
-      return;
-    }
-    // Check if the file exists
-    console.log("image", wallpaperImage);
-    if (!wallpaperImage) {
-      res.status(400).json({ error: "Wallpaper image is required" });
+    if (!category || !wallpaperImage) {
+      res.status(400).json({ error: "Category and image are required" });
       return;
     }
 
     const imgUploaded = await uploadToCloudinary(wallpaperImage.path);
-    console.log(imgUploaded);
 
     if (!imgUploaded) {
-      res
-        .status(400)
-        .json({ error: "Cloudinary image uploading error", imgUploaded });
+      res.status(400).json({ error: "Error uploading image to Cloudinary" });
       return;
     }
 
@@ -40,17 +28,18 @@ const addWallpaperController = async (req: Request, res: Response) => {
       downloadCount: 0,
       viewCount: 0,
     });
-    if (!newWallpaper) {
-      res
-        .status(400)
-        .json({ error: "Error during creating new wallpaper model" });
-      return;
-    }
+
     await newWallpaper.save();
+
+    // Invalidate relevant Redis caches
+    await redisClient.del("categories"); // Clear category cache
+    await redisClient.keys(`wallpapers:*`).then((keys) => {
+      if (keys.length) redisClient.del(keys); // Clear all wallpaper-related caches
+    });
 
     res.status(200).json({ message: "Wallpaper added successfully" });
   } catch (error) {
-    console.log("erro", error);
+    console.error("Error adding wallpaper:", error);
     res.status(500).json({ error: "Failed to add wallpaper" });
   }
 };
@@ -58,66 +47,59 @@ const addWallpaperController = async (req: Request, res: Response) => {
 const getWallpapersByCategoryController = async (
   req: Request,
   res: Response
-) => {
+): Promise<void> => {
   try {
-    // Get category from request parameters
-    console.log("request");
     const { category } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const favouriteIds = req.query?.favouriteIds;
 
-    // Get page and limit from query parameters
-    let page = req.query.page as string; // Treat page as string
-    let limit = req.query.limit as string; // Treat limit as string
-    let favouriteIds = req.query?.favouriteIds as string; // Treat limit as string
+    const cacheKey = `wallpapers:${category}:${page}:${limit}`;
 
-    // Set defaults for pagination if not provided
-    page = page ? page : "1"; // Default to page 1 if undefined
-    limit = limit ? limit : "10"; // Default to 10 wallpapers per page if undefined
+    // Check Redis cache
+    const cachedData = await redisClient.get(cacheKey);
+    if (cachedData) {
+      res.status(200).json(JSON.parse(cachedData));
+      return;
+    }
 
-    // Parse page and limit to integers
-    const pageNumber = parseInt(page, 10);
-    const limitNumber = parseInt(limit, 10);
+    // Calculate pagination
+    const skip = (page - 1) * limit;
 
-    // Ensure that the parsed values are valid numbers, otherwise fallback to defaults
-    const validPage = pageNumber > 0 ? pageNumber : 1;
-    const validLimit = limitNumber > 0 ? limitNumber : 10;
+    let wallpapers, totalCount;
 
-    // Calculate how many wallpapers to skip
-    const skip = (validPage - 1) * validLimit;
-
-    // Find wallpapers by category with pagination
-    let wallpapers;
-    let totalCount;
     if (category === "all-wallpapers") {
-      wallpapers = await WallpaperModel.find({}).skip(skip).limit(validLimit);
+      wallpapers = await WallpaperModel.find({}).skip(skip).limit(limit);
       totalCount = await WallpaperModel.countDocuments({});
     } else if (category === "favourite" && favouriteIds) {
-      const ids = JSON.parse(favouriteIds);
+      const ids = JSON.parse(favouriteIds as string);
       wallpapers = await WallpaperModel.find({ id: { $in: ids } })
         .skip(skip)
-        .limit(validLimit);
-
+        .limit(limit);
       totalCount = await WallpaperModel.countDocuments({ id: { $in: ids } });
     } else {
       wallpapers = await WallpaperModel.find({ category })
         .skip(skip)
-        .limit(validLimit);
+        .limit(limit);
       totalCount = await WallpaperModel.countDocuments({ category });
     }
 
-    // Get the total count of wallpapers in the category
+    const totalPages = Math.ceil(totalCount / limit);
 
-    // Calculate total pages
-    const totalPages = Math.ceil(totalCount / validLimit);
-
-    // Return the results with pagination info
-    res.status(200).json({
-      page: validPage,
-      limit: validLimit,
+    const result = {
+      page,
+      limit,
       totalPages,
       totalCount,
       wallpapers,
-    });
+    };
+
+    // Cache result in Redis for 30 minutes
+    await redisClient.setEx(cacheKey, 1800, JSON.stringify(result));
+
+    res.status(200).json(result);
   } catch (error) {
+    console.error("Error fetching wallpapers:", error);
     res.status(500).json({ error: "Error fetching wallpapers" });
   }
 };
@@ -127,15 +109,8 @@ const addBulkWallpapersController = async (req: Request, res: Response) => {
     const { category } = req.body;
     const wallpaperImages = req.files as Express.Multer.File[];
 
-    if (!category) {
-      res.status(400).json({ error: "Category is required" });
-      return;
-    }
-
-    if (!wallpaperImages || wallpaperImages.length === 0) {
-      res
-        .status(400)
-        .json({ error: "At least one wallpaper image is required" });
+    if (!category || !wallpaperImages?.length) {
+      res.status(400).json({ error: "Category and images are required" });
       return;
     }
 
@@ -144,9 +119,7 @@ const addBulkWallpapersController = async (req: Request, res: Response) => {
     for (const wallpaper of wallpaperImages) {
       const imgUploaded = await uploadToCloudinary(wallpaper.path);
 
-      if (!imgUploaded) {
-        continue; // Skip to the next file if upload fails
-      }
+      if (!imgUploaded) continue;
 
       const newWallpaper = new WallpaperModel({
         id: imgUploaded.public_id,
@@ -160,21 +133,10 @@ const addBulkWallpapersController = async (req: Request, res: Response) => {
       uploadedWallpapers.push(newWallpaper);
     }
 
-    // Cleanup: Delete all files in the 'public' folder after successful uploads
-    const publicFolderPath = path.join(__dirname, "../../public");
-    fs.readdir(publicFolderPath, (err, files) => {
-      if (err) {
-        console.error("Error reading public folder:", err);
-        return;
-      }
-      for (const file of files) {
-        const filePath = path.join(publicFolderPath, file);
-        fs.unlink(filePath, (unlinkErr) => {
-          if (unlinkErr) {
-            console.error("Error deleting file:", unlinkErr);
-          }
-        });
-      }
+    // Invalidate caches
+    await redisClient.del("categories");
+    await redisClient.keys(`wallpapers:*`).then((keys) => {
+      if (keys.length) redisClient.del(keys);
     });
 
     res.status(200).json({
@@ -189,6 +151,6 @@ const addBulkWallpapersController = async (req: Request, res: Response) => {
 
 export {
   addWallpaperController,
-  getWallpapersByCategoryController,
   addBulkWallpapersController,
+  getWallpapersByCategoryController,
 };

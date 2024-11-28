@@ -1,24 +1,28 @@
 import { Request, Response } from "express";
 import WallpaperModel from "../models/wallpaper-schema";
+import { redisClient } from "../config/redis";
 
-interface TCategory {
-  name: string;
-  previewUrl: string;
-}
-
-interface TCategory {
-  name: string;
-  previewUrl: string;
-}
-
-const getAllCategoriesController = async (_req: Request, res: Response) => {
+const getAllCategoriesController = async (
+  _req: Request,
+  res: Response
+): Promise<void> => {
   try {
-    // Aggregate distinct categories along with a preview URL for each category
-    const categories: TCategory[] = await WallpaperModel.aggregate([
+    const cacheKey = "categories";
+
+    // Check Redis cache
+    const cachedData = await redisClient.get(cacheKey);
+
+    if (cachedData) {
+      res.status(200).json({ allCategories: JSON.parse(cachedData) });
+      return;
+    }
+
+    // Fetch categories from database
+    const categories = await WallpaperModel.aggregate([
       {
         $group: {
           _id: "$category", // Group by category
-          previewUrl: { $first: "$url" }, // Pick the first image URL as preview
+          previewUrl: { $first: "$url" }, // Use the first image URL as preview
         },
       },
       {
@@ -35,6 +39,9 @@ const getAllCategoriesController = async (_req: Request, res: Response) => {
       return;
     }
 
+    // Cache categories in Redis for 1 hour
+    await redisClient.setEx(cacheKey, 3600, JSON.stringify(categories));
+
     res.status(200).json({ allCategories: categories });
   } catch (error) {
     console.error("Error fetching categories:", error);
@@ -42,4 +49,4 @@ const getAllCategoriesController = async (_req: Request, res: Response) => {
   }
 };
 
-export { getAllCategoriesController };
+export {getAllCategoriesController}

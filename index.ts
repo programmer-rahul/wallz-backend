@@ -5,6 +5,7 @@ import cors from "cors";
 import { wallpaperRouter } from "./src/routes/wallpaper-route";
 import { categoryRouter } from "./src/routes/category-route";
 import { connectCloudinary } from "./src/config/cloudinary";
+import { connectRedis } from "./src/config/redis";
 
 dotenv.config({
   path: ".env",
@@ -28,6 +29,7 @@ app.use("/category", categoryRouter);
 DBConnect()
   .then(() => {
     connectCloudinary();
+    connectRedis();
     app.listen(PORT, () => {
       "Server is running!";
     });
