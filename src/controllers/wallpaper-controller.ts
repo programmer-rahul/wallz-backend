@@ -44,69 +44,6 @@ const addWallpaperController = async (req: Request, res: Response) => {
   }
 };
 
-const getWallpapersByCategoryController = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  try {
-    console.log("get wallpapers request");
-    const { category } = req.params;
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const favouriteIds = req.query?.favouriteIds;
-
-    const cacheKey = `wallpapers:${category}:${page}:${limit}`;
-
-    // Check redisClient cache
-    const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) {
-      res.status(200).json(JSON.parse(cachedData));
-      return;
-    }
-
-    // Calculate pagination
-    const skip = (page - 1) * limit;
-
-    let wallpapers, totalCount;
-
-    if (category === "all-wallpapers") {
-      wallpapers = await WallpaperModel.aggregate([
-        { $sample: { size: limit } }, // Randomly sample `limit` documents
-      ]);
-      totalCount = await WallpaperModel.countDocuments({}); // Total documents
-    } else if (category === "favourite" && favouriteIds) {
-      const ids = JSON.parse(favouriteIds as string);
-      wallpapers = await WallpaperModel.find({ id: { $in: ids } })
-        .skip(skip)
-        .limit(limit);
-      totalCount = await WallpaperModel.countDocuments({ id: { $in: ids } });
-    } else {
-      wallpapers = await WallpaperModel.find({ category })
-        .skip(skip)
-        .limit(limit);
-      totalCount = await WallpaperModel.countDocuments({ category });
-    }
-
-    const totalPages = Math.ceil(totalCount / limit);
-
-    const result = {
-      page,
-      limit,
-      totalPages,
-      totalCount,
-      wallpapers,
-    };
-
-    // Cache result in redisClient for 30 minutes
-    await redisClient.setex(cacheKey, 1800, JSON.stringify(result));
-
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("Error fetching wallpapers:", error);
-    res.status(500).json({ error: "Error fetching wallpapers" });
-  }
-};
-
 const addBulkWallpapersController = async (req: Request, res: Response) => {
   try {
     const { category } = req.body;
@@ -152,8 +89,143 @@ const addBulkWallpapersController = async (req: Request, res: Response) => {
   }
 };
 
+const getWallpapersByCategoryController = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    console.log("get wallpapers request");
+    const { category } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const favouriteIds = req.query?.favouriteIds;
+
+    const cacheKey = `wallpapers:${category}:${page}:${limit}`;
+
+    // Check redisClient cache
+    // const cachedData = await redisClient.get(cacheKey);
+    // if (cachedData) {
+    //   res.status(200).json(JSON.parse(cachedData));
+    //   return;
+    // }
+
+    // Calculate pagination
+    const skip = (page - 1) * limit;
+
+    let wallpapers, totalCount;
+
+    if (category === "all-wallpapers") {
+      wallpapers = await WallpaperModel.aggregate([
+        { $sample: { size: limit } }, // Randomly sample `limit` documents
+      ]);
+      totalCount = await WallpaperModel.countDocuments({}); // Total documents
+    } else if (category === "favourite" && favouriteIds) {
+      const ids = JSON.parse(favouriteIds as string);
+      wallpapers = await WallpaperModel.find({ id: { $in: ids } })
+        .skip(skip)
+        .limit(limit);
+      totalCount = await WallpaperModel.countDocuments({ id: { $in: ids } });
+    } else {
+      wallpapers = await WallpaperModel.find({ category })
+        .skip(skip)
+        .limit(limit);
+      totalCount = await WallpaperModel.countDocuments({ category });
+    }
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    const result = {
+      page,
+      limit,
+      totalPages,
+      totalCount,
+      wallpapers,
+    };
+
+    // Cache result in redisClient for 30 minutes
+    await redisClient.setex(cacheKey, 1800, JSON.stringify(result));
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error fetching wallpapers:", error);
+    res.status(500).json({ error: "Error fetching wallpapers" });
+  }
+};
+
+const addWallpaperViewCountController = async (req: Request, res: Response) => {
+  try {
+    const wallpaperId = req.query.wallpaperId as string;
+    console.log("wallpaperId", wallpaperId);
+
+    if (!wallpaperId) {
+      res.status(400).json({ error: "WallpaperId is required" });
+      return;
+    }
+    const updatedCount = await WallpaperModel.findOneAndUpdate(
+      {
+        id: wallpaperId,
+      },
+      { $inc: { viewCount: 1 } }
+    );
+
+    if (!updatedCount) {
+      res
+        .status(400)
+        .json({ error: "Error in increamenting view count of wallpaper" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Wallpapers view count increamented successfully",
+      status: true,
+    });
+  } catch (error) {
+    console.error("Error in increamenting view count of wallpaper ", error);
+    res
+      .status(500)
+      .json({ error: "Error in increamenting view count of wallpaper" });
+  }
+};
+
+const addWallpaperDownloadCountController = async (req: Request, res: Response) => {
+  try {
+    const wallpaperId = req.query.wallpaperId as string;
+    console.log("wallpaperId", wallpaperId);
+
+    if (!wallpaperId) {
+      res.status(400).json({ error: "WallpaperId is required" });
+      return;
+    }
+    const updatedCount = await WallpaperModel.findOneAndUpdate(
+      {
+        id: wallpaperId,
+      },
+      { $inc: { downloadCount: 1 } }
+    );
+
+    if (!updatedCount) {
+      res
+        .status(400)
+        .json({ error: "Error in increamenting download count of wallpaper" });
+      return;
+    }
+
+    res.status(200).json({
+      message: "Wallpapers download count increamented successfully",
+      status: true,
+    });
+  } catch (error) {
+    console.error("Error in increamenting download count of wallpaper ", error);
+    res
+      .status(500)
+      .json({ error: "Error in increamenting download count of wallpaper" });
+  }
+};
+
 export {
   addWallpaperController,
   addBulkWallpapersController,
   getWallpapersByCategoryController,
+  addWallpaperViewCountController,
+  addWallpaperDownloadCountController,
 };

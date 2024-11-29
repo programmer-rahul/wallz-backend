@@ -3,6 +3,8 @@ import upload from "../middlewares/multer-middleware";
 import {
   addBulkWallpapersController,
   addWallpaperController,
+  addWallpaperDownloadCountController,
+  addWallpaperViewCountController,
   getWallpapersByCategoryController,
 } from "../controllers/wallpaper-controller";
 
@@ -19,5 +21,11 @@ wallpaperRouter
 wallpaperRouter
   .route("/get-wallpaper/:category")
   .get(getWallpapersByCategoryController);
+
+wallpaperRouter.route("/inc-view-count").post(addWallpaperViewCountController);
+
+wallpaperRouter
+  .route("/inc-download-count")
+  .post(addWallpaperDownloadCountController);
 
 export { wallpaperRouter };

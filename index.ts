@@ -28,11 +28,11 @@ app.use("/category", categoryRouter);
 
 DBConnect()
   .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}!`);
+    });
     connectCloudinary();
     connectRedis();
-    app.listen(PORT, () => {
-      "Server is running!";
-    });
   })
   .catch((err) => {
     console.log("Database connection error :- ", err);

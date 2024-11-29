@@ -1,13 +1,10 @@
 import Redis from "ioredis";
 
 let redisClient: Redis;
-const redisUrl =
-  process.env.REDIS_URL ||
-  "redis://localhost:6379";
 
 const connectRedis = async () => {
   try {
-    redisClient = new Redis(redisUrl);
+    redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
     console.log("Redis connected successfully");
 
     // redis connection events
