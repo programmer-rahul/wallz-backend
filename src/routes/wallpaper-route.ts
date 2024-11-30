@@ -2,30 +2,33 @@ import { Router } from "express";
 import upload from "../middlewares/multer-middleware";
 import {
   addBulkWallpapersController,
-  addWallpaperController,
   addWallpaperDownloadCountController,
   addWallpaperViewCountController,
+  deleteWallpaperByIdController,
   getWallpapersByCategoryController,
 } from "../controllers/wallpaper-controller";
+import asyncHandler from "../utils/asyncHandler";
 
 const wallpaperRouter = Router();
 
 wallpaperRouter
-  .route("/add-wallpaper")
-  .post(upload.single("wallpaperImage"), addWallpaperController);
-
-wallpaperRouter
   .route("/add-wallpaper-bulk")
-  .post(upload.array("wallpapers"), addBulkWallpapersController);
+  .post(upload.array("wallpapers"), asyncHandler(addBulkWallpapersController));
 
 wallpaperRouter
   .route("/get-wallpaper/:category")
-  .get(getWallpapersByCategoryController);
+  .get(asyncHandler(getWallpapersByCategoryController));
 
-wallpaperRouter.route("/inc-view-count").post(addWallpaperViewCountController);
+wallpaperRouter
+  .route("/inc-view-count")
+  .put(asyncHandler(addWallpaperViewCountController));
 
 wallpaperRouter
   .route("/inc-download-count")
-  .post(addWallpaperDownloadCountController);
+  .put(asyncHandler(addWallpaperDownloadCountController));
+
+wallpaperRouter
+  .route("/delete-wallpaper/:id")
+  .delete(asyncHandler(deleteWallpaperByIdController));
 
 export { wallpaperRouter };
