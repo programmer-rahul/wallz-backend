@@ -30,7 +30,7 @@ app.use(
 // Routes
 app.use("/wallpaper", wallpaperRouter);
 app.use("/category", categoryRouter);
-app.get("/health", (req, res) => {
+app.get("/health", (_, res) => {
   res.status(200).json({ status: "UP", timestamp: Date.now() });
 });
 
